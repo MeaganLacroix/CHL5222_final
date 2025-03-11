@@ -1,0 +1,95 @@
+---
+title: "Analysis of Correlated Data (CHL5222H) FInal Project"
+subtitle: "Beating the Blues"
+author: Meagan Lacroix
+format: pdf
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(tidyverse)
+library(tinytex)
+library(knitr)
+library(kableExtra)
+library(nlme)
+library(texreg)
+library(AICcmodavg)
+knitr::opts_knit$set(root.dir = here())
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+theme_set(theme_bw(base_size = 15)) # Use black/white theme and increase font size for all ggplot figures
+```
+
+```{r}
+btb <- read.table(here("data", "btheb.txt"), header = TRUE)
+```
+
+```{r}
+names(btb)
+head(btb)
+tail(btb)
+```
+
+
+```{r}
+#add participant ID
+btb <- btb %>%
+  mutate(id = row_number()) %>%
+  select(id, everything())
+```
+
+```{r}
+btb <- btb %>%
+  mutate(
+    drug = factor(drug, levels = c("No", "Yes")),  # Set reference level
+    length = factor(length, levels = c("<6m", ">6m")),  # Set reference level
+    treatment = factor(treatment, levels = c("TAU", "BtheB"))  # Set TAU as reference
+  )
+```
+
+```{r}
+str(btb)  # Check structure
+table(btb$drug)  # See counts for each category
+table(btb$treatment)
+```
+
+```{r}
+#make data set long
+btb.long <- btb %>%
+pivot_longer(cols = c("bdi.pre","bdi.2m", "bdi.4m", "bdi.6m", "bdi.8m"),
+names_to = "visit",
+values_to = "score")%>%
+  mutate(
+    occasion = case_when(
+      visit == "bdi.pre" ~ 0,
+      visit == "bdi.2m"  ~ 1,
+      visit == "bdi.4m"  ~ 2,
+      visit == "bdi.6m"  ~ 3,
+      visit == "bdi.8m"  ~ 4))
+```
+
+```{r}
+btb_summary <- btb.long %>%
+  group_by(occasion, treatment, drug, length) %>%
+  summarise(
+    mean_bdi = mean(score, na.rm = TRUE),
+    sd_bdi = sd(score, na.rm = TRUE),  
+    lower_ci = mean_bdi - 1.96 * sd_bdi,  
+    upper_ci = mean_bdi + 1.96 * sd_bdi   
+  ) %>%
+  ungroup()
+```
+
+```{r}
+ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = treatment)) +
+  geom_line(size = 1) +    # Line plot for mean BDI over time
+  geom_point(size = 2) +   # Add points for means
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci), width = 0.2) + # Add 95% CI
+  facet_grid(drug ~ length) +  # Panel by drug and length groups
+  labs(title = "Mean BDI Score Over Time by Treatment",
+       x = "Time (Occasion)", y = "Mean BDI Score",
+       color = "Treatment Group") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
+```
+
+
