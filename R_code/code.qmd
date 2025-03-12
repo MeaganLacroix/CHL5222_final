@@ -38,6 +38,7 @@ btb <- btb %>%
 ```
 
 ```{r}
+#make drug, length, and treatment as factors
 btb <- btb %>%
   mutate(
     drug = factor(drug, levels = c("No", "Yes")),  # Set reference level
@@ -68,6 +69,7 @@ values_to = "score")%>%
 ```
 
 ```{r}
+#make summary table for plotting
 btb_summary <- btb.long %>%
   group_by(occasion, treatment, drug, length) %>%
   summarise(
@@ -80,6 +82,7 @@ btb_summary <- btb.long %>%
 ```
 
 ```{r}
+#COME BACK TO THIS AND FIX
 ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = treatment)) +
   geom_line(size = 1) +    # Line plot for mean BDI over time
   geom_point(size = 2) +   # Add points for means
@@ -91,5 +94,48 @@ ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = t
   theme_minimal() +
   theme(strip.text = element_text(size = 12, face = "bold"))
 ```
+```{r}
+#create histogram of the distribution of scores
 
+ggplot(btb, aes(x = bdi.pre)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of BDI Scores Pre-Intervention", x = "BDI Score", y = "Count") +
+  theme_minimal() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+ggplot(btb.long, aes(x = occasion, y = score, color = treatment)) +
+  geom_point(alpha = 0.5) +  # Show individual data points
+  geom_smooth(method = "loess", se = TRUE) +  # Smooth line with confidence interval
+  labs(title = "BDI Score Trends Over Time", x = "Time (Occasion)", y = "BDI Score") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+# Summarize counts for Table 1
+summary_table <- btb %>%
+  group_by(drug, length, treatment) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = treatment, values_from = Count, values_fill = 0) %>%
+  rename("Treatment as Usual" = `TAU`, "Beat the Blues" = `BtheB`) %>%
+  mutate(Total = `Treatment as Usual` + `Beat the Blues`)  # Total column
+
+# Compute total row
+total_row <- summary_table %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  mutate(drug = "Total", length = "")
+
+# Combine with total row
+summary_table <- bind_rows(summary_table, total_row)
+```
+
+```{r}
+summary_table %>%
+  kable(format = "html", caption = "Number of Participants per Treatment Group", align = "c") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
+  add_header_above(c(" " = 2, "Treatment Group" = 3))  # Merged header over TAU & BtheB
+ 
+```
 
