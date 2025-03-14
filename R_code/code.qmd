@@ -139,3 +139,58 @@ summary_table %>%
  
 ```
 
+```{r}
+btb_summary2 <- btb.long %>%
+  group_by(treatment, occasion) %>%
+  summarise(
+    mean_bdi = mean(score, na.rm = TRUE),
+    sd_bdi = sd(score, na.rm = TRUE),  
+    lower_ci = mean_bdi - 1.96 * sd_bdi,  
+    upper_ci = mean_bdi + 1.96 * sd_bdi   
+  ) %>%
+  mutate(occasion = case_when(
+    occasion == 0 ~ "Baseline",
+    occasion == 1 ~ "Month 2",
+    occasion == 2 ~ "Month 4",
+    occasion == 3 ~ "Month 6",
+    occasion == 4 ~ "Month 8"
+  )) %>%
+  ungroup()
+```
+
+```{r}
+# Pivot to wide format
+summary2_wide <- btb_summary2 %>%
+  pivot_wider(names_from = treatment, values_from = c(mean_bdi, sd_bdi, lower_ci, upper_ci)) %>%
+  rename(
+    "Occasion" = occasion,
+    "Mean (SD) - TAU" = mean_bdi_TAU,
+    "95% CI - TAU" = lower_ci_TAU,
+    "Mean (SD) - BtheB" = mean_bdi_BtheB,
+    "95% CI - BtheB" = lower_ci_BtheB
+  ) %>%
+  mutate(
+    `Mean (SD) - TAU` = paste0(round(`Mean (SD) - TAU`, 2), " (", round(sd_bdi_TAU, 2), ")"),
+    `95% CI - TAU` = paste0("[", round(`95% CI - TAU`, 2), ", ", round(upper_ci_TAU, 2), "]"),
+    `Mean (SD) - BtheB` = paste0(round(`Mean (SD) - BtheB`, 2), " (", round(sd_bdi_BtheB, 2), ")"),
+    `95% CI - BtheB` = paste0("[", round(`95% CI - BtheB`, 2), ", ", round(upper_ci_BtheB, 2), "]")
+  ) %>%
+  select(Occasion, `Mean (SD) - TAU`, `95% CI - TAU`, `Mean (SD) - BtheB`, `95% CI - BtheB`)  # Reorder columns
+
+colnames(summary2_wide) <- c("Occasion", "Mean (SD)", "95% CI", "Mean (SD)", "95% CI")
+
+summary2_wide %>%
+  kable(format = "html", caption = "Mean BDI Scores Over Time by Treatment Group", align = "c") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
+  add_header_above(c(" " = 1, "Treatment as Usual" = 2, "Beat the Blues" = 2))
+```
+
+```{r}
+#summarizing number of observations at each occasion
+measurement_counts <- btb.long %>%
+  group_by(occasion) %>%
+  summarise(n = sum(!is.na(score)))
+
+measurement_counts
+```
+
