@@ -82,7 +82,7 @@ btb_summary <- btb.long %>%
 ```
 
 ```{r}
-#COME BACK TO THIS AND FIX
+
 ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = treatment)) +
   geom_line(size = 1) +    # Line plot for mean BDI over time
   geom_point(size = 2) +   # Add points for means
@@ -92,8 +92,12 @@ ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = t
        x = "Time (Occasion)", y = "Mean BDI Score",
        color = "Treatment Group") +
   theme_minimal() +
-  theme(strip.text = element_text(size = 12, face = "bold"))
+  theme(strip.text = element_text(size = 12, face = "bold"))+
+  ylim(0, 60) +
+  theme(plot.title = element_text(hjust = 0.5))
+
 ```
+
 ```{r}
 #create histogram of the distribution of scores
 
@@ -106,11 +110,20 @@ ggplot(btb, aes(x = bdi.pre)) +
 ```
 
 ```{r}
+btb_plot_summary <- btb.long %>%
+  group_by(occasion, treatment) %>%
+  summarise(mean_score = mean(score, na.rm = TRUE), .groups = "drop")
+
+# Create the plot with trend line for mean values
 ggplot(btb.long, aes(x = occasion, y = score, color = treatment)) +
   geom_point(alpha = 0.5) +  # Show individual data points
-  geom_smooth(method = "loess", se = TRUE) +  # Smooth line with confidence interval
-  labs(title = "BDI Score Trends Over Time", x = "Time (Occasion)", y = "BDI Score") +
+  geom_line(data = btb_plot_summary, aes(x = occasion, y = mean_score, color = treatment, group = treatment), size = 1.2) +  # Line for mean trend
+  labs(title = "BDI Score Trends Over Time", x = "Occasion", y = "BDI Score",
+       color = "Treatment") +
+  scale_x_continuous(breaks = c(0, 1, 2, 3, 4),  # Specify breaks
+                     labels = c("Baseline", "Month 2", "Month 4", "Month 6", "Month 8")) + 
   theme_minimal() +
+  ylim(0, 60) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 ```{r}
@@ -133,10 +146,9 @@ summary_table <- bind_rows(summary_table, total_row)
 
 ```{r}
 summary_table %>%
-  kable(format = "html", caption = "Number of Participants per Treatment Group", align = "c") %>%
+  kable(format = "html", caption = "<p style='text-align:center; font-weight:bold;'>Number of Participants per Treatment Group</p>", align = "c") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
-  add_header_above(c(" " = 2, "Treatment Group" = 3))  # Merged header over TAU & BtheB
- 
+  add_header_above(c(" " = 2, "Treatment Group" = 3)) 
 ```
 
 ```{r}
@@ -144,9 +156,7 @@ btb_summary2 <- btb.long %>%
   group_by(treatment, occasion) %>%
   summarise(
     mean_bdi = mean(score, na.rm = TRUE),
-    sd_bdi = sd(score, na.rm = TRUE),  
-    lower_ci = mean_bdi - 1.96 * sd_bdi,  
-    upper_ci = mean_bdi + 1.96 * sd_bdi   
+    sd_bdi = sd(score, na.rm = TRUE)
   ) %>%
   mutate(occasion = case_when(
     occasion == 0 ~ "Baseline",
@@ -159,32 +169,40 @@ btb_summary2 <- btb.long %>%
 ```
 
 ```{r}
-# Pivot to wide format
-summary2_wide <- btb_summary2 %>%
-  pivot_wider(names_from = treatment, values_from = c(mean_bdi, sd_bdi, lower_ci, upper_ci)) %>%
-  rename(
-    "Occasion" = occasion,
-    "Mean (SD) - TAU" = mean_bdi_TAU,
-    "95% CI - TAU" = lower_ci_TAU,
-    "Mean (SD) - BtheB" = mean_bdi_BtheB,
-    "95% CI - BtheB" = lower_ci_BtheB
-  ) %>%
-  mutate(
-    `Mean (SD) - TAU` = paste0(round(`Mean (SD) - TAU`, 2), " (", round(sd_bdi_TAU, 2), ")"),
-    `95% CI - TAU` = paste0("[", round(`95% CI - TAU`, 2), ", ", round(upper_ci_TAU, 2), "]"),
-    `Mean (SD) - BtheB` = paste0(round(`Mean (SD) - BtheB`, 2), " (", round(sd_bdi_BtheB, 2), ")"),
-    `95% CI - BtheB` = paste0("[", round(`95% CI - BtheB`, 2), ", ", round(upper_ci_BtheB, 2), "]")
-  ) %>%
-  select(Occasion, `Mean (SD) - TAU`, `95% CI - TAU`, `Mean (SD) - BtheB`, `95% CI - BtheB`)  # Reorder columns
 
-colnames(summary2_wide) <- c("Occasion", "Mean (SD)", "95% CI", "Mean (SD)", "95% CI")
+# Pivot data to wide format
+summary2_wide <- btb_summary2 %>%
+  pivot_wider(names_from = treatment, values_from = c(mean_bdi, sd_bdi)
+  )
+#Reorder columns
+summary2_wide <- summary2_wide %>%
+  select(occasion, `mean_bdi_TAU`, `sd_bdi_TAU`, `mean_bdi_BtheB`, `sd_bdi_BtheB`)
+
+
+colnames(summary2_wide) <- c("Occasion", "Mean", "SD", "Mean", "SD")
+
 
 summary2_wide %>%
-  kable(format = "html", caption = "Mean BDI Scores Over Time by Treatment Group", align = "c") %>%
+  kable(format = "html", caption = "<p style='text-align:center; font-weight:bold;'>Mean BDI Scores Over Time by Treatment Group</p>", align = "c") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
   add_header_above(c(" " = 1, "Treatment as Usual" = 2, "Beat the Blues" = 2))
+
 ```
 
+```{r}
+
+ggplot(btb_summary2, aes(x = occasion, y = mean_bdi, color = treatment, group = treatment)) +
+  geom_line(size = 1) +    # Line plot for mean BDI over time
+  geom_point(size = 2) +   # Add points for means
+  geom_errorbar(aes(ymin = mean_bdi - sd_bdi, ymax = mean_bdi + sd_bdi), width = 0.2) + # Add 95% CI
+  labs(title = "Mean BDI Score Over Time by Treatment",
+       x = "Occasion", y = "Mean BDI Score",
+       color = "Treatment Group") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))+
+  ylim(0, 60) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 ```{r}
 #summarizing number of observations at each occasion
 measurement_counts <- btb.long %>%
