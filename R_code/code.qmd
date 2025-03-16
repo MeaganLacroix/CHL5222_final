@@ -3,6 +3,7 @@ title: "Analysis of Correlated Data (CHL5222H) FInal Project"
 subtitle: "Beating the Blues"
 author: Meagan Lacroix
 format: pdf
+
 ---
 
 ```{r setup, include=FALSE}
@@ -14,6 +15,7 @@ library(kableExtra)
 library(nlme)
 library(texreg)
 library(AICcmodavg)
+
 knitr::opts_knit$set(root.dir = here())
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 theme_set(theme_bw(base_size = 15)) # Use black/white theme and increase font size for all ggplot figures
@@ -108,6 +110,14 @@ ggplot(btb, aes(x = bdi.pre)) +
   theme(plot.title = element_text(hjust = 0.5))
 
 ```
+```{r}
+ggplot(btb, aes(x = bdi.pre)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of BDI Scores Pre-Intervention", x = "BDI Score", y = "Count") +
+  theme_minimal() + 
+  facet_wrap(~ treatment) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 ```{r}
 btb_plot_summary <- btb.long %>%
@@ -133,20 +143,23 @@ summary_table <- btb %>%
   summarise(Count = n(), .groups = "drop") %>%
   pivot_wider(names_from = treatment, values_from = Count, values_fill = 0) %>%
   rename("Treatment as Usual" = `TAU`, "Beat the Blues" = `BtheB`) %>%
-  mutate(Total = `Treatment as Usual` + `Beat the Blues`)  # Total column
+  mutate(Total = `Treatment as Usual` + `Beat the Blues`) %>%
+  rename(Drug = drug, Length = length)
 
 # Compute total row
 total_row <- summary_table %>%
   summarise(across(where(is.numeric), sum)) %>%
-  mutate(drug = "Total", length = "")
+  mutate(Drug = "Total", Length = "")
 
 # Combine with total row
 summary_table <- bind_rows(summary_table, total_row)
 ```
 
+
+
 ```{r}
 summary_table %>%
-  kable(format = "html", caption = "<p style='text-align:center; font-weight:bold;'>Number of Participants per Treatment Group</p>", align = "c") %>%
+  kable(format = "html", caption = "<p style='text-align:center; font-weight:bold;'>Table 1. Number of Participants per Treatment Group</p>", align = "c") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
   add_header_above(c(" " = 2, "Treatment Group" = 3)) 
 ```
@@ -210,5 +223,16 @@ measurement_counts <- btb.long %>%
   summarise(n = sum(!is.na(score)))
 
 measurement_counts
+```
+```{r}
+measurement_counts2 <- btb.long %>%
+  group_by(treatment, occasion) %>%
+  summarise(n = sum(is.na(score)), .groups = "drop")
+
+measurement_counts2_wide <- measurement_counts2 %>%
+  pivot_wider(names_from = treatment, values_from = n) %>%
+  mutate(Total = TAU + BtheB)
+
+measurement_counts2_wide
 ```
 
