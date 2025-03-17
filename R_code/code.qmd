@@ -236,3 +236,110 @@ measurement_counts2_wide <- measurement_counts2 %>%
 measurement_counts2_wide
 ```
 
+
+Methods
+```{r}
+##compare mean models to find best out of that
+#looks like there is a treatment difference
+#looks like they are parallel 
+#looks like small time trend, especially at beginning of trial, then it smooths out
+#most likely linear but will check quadratic time trend
+
+#don't need to include treatment bc it is a randomized trial
+#24% of data is missing - assume MAR, use multiple imputation
+library(mice)
+sapply(btb.long, function(x) sum(is.na(x)))
+
+btb %>%
+  dplyr::select(-id, -drug, -length, -treatment) %>%
+  md.pattern()
+
+# missing data is monotone, arising from dropout, use likelihood methods like in class
+
+#initialize mice to get predictor matrix
+init=mice(btb.long, max=0, print=FALSE)
+pred=init$predictorMatrix
+
+#remove unwanted variables from predictor matrix
+pred[, "drug"] = 0
+pred[, "length"] = 0
+pred[, "treatment"] = 0
+pred[, "visit"] = 0
+pred[, "occasion"] = 0
+
+#restrict variable with NAs from being imputed 
+meth=init$method
+meth[c("score")]="norm" 
+
+imputed = mice(btb.long, method=meth, predictorMatrix=pred, m=5)
+
+imp <- complete(imputed)
+head(imp)
+
+##compare mean models
+
+#1)linear model
+btb.long$occasion <- as.numeric(as.factor(btb.long$occasion))
+
+mean.mod1 <- gls(score ~ drug + length + occasion +  treatment:occasion,  corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, data = btb.long)
+
+#2) quadratic model
+btb.long <- btb.long %>%
+  mutate(occasionc = occasion - mean(occasion), 
+         occasion2 = occasionc^2)
+
+mean.mod2 <- gls(score ~ occasionc+ drug + length + treatment:occasionc + treatment:occasion2, corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, data = btb.long)
+
+summary(mean.mod2)
+
+#3) model with no interaction
+mean.mod3 <- gls(score ~ occasion + length + drug, corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, data = btb.long)
+
+#4) spline at month = 2
+btb.long <- btb.long %>%
+  mutate(month = ifelse(occasion ==1,0,
+                        ifelse(occasion ==2,2,
+                            ifelse(occasion==3,4,
+                               ifelse(occasion==4,6,NA)))),
+    knot = ifelse(month - 2 < 0, 0, month - 2))
+
+spline.mod1 <- gls(score ~ drug + length + occasion + knot +  treatment:occasion + treatment:knot,  corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, data = btb.long)
+
+
+## compare mean models using lrt since they are nested
+# refit models with ML
+mean.mod1.ml <- gls(score ~ drug + length + occasion +  treatment:occasion,  corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, method = "ML", data = btb.long)
+
+mean.mod2.ml <- gls(score ~ occasionc + drug + length + treatment:occasionc + treatment:occasion2, corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, method = "ML", data = btb.long)
+
+mean.mod3.ml <- gls(score ~ occasion + length + drug, corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, method="ML", data = btb.long)
+
+spline.mod1.ml <- gls(score ~ drug + length + occasion + knot +  treatment:occasion + treatment:knot,  corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, method = "ML", data = btb.long)
+
+anova(mean.mod1.ml, mean.mod2.ml)
+# p value is 0.0284 so we reject the null and say the quadratic is better 
+
+anova(mean.mod1.ml, mean.mod3.ml)
+#pvalue is 0.24 so we do not reject the null and accept model 3
+
+anova(mean.mod2.ml, mean.mod3.ml)
+
+mean.mod1.ml <- gls(score ~ drug + length + occasion +  treatment:occasion,  corr=corSymm(form= ~ occasion | id), weights = varIdent(form = ~ 1 | occasion), na.action = na.omit, , method = "ML", data = btb.long)
+
+##compare mean model to random intercept model
+rim1 <- lme(score ~ occasion + drug + length, random = ~ 1 | id, data = btb.long, na.action = na.omit)
+
+
+
+
+##compare different variance structures
+
+
+
+
+
+```
+
+
+
+
