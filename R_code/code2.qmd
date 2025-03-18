@@ -257,29 +257,6 @@ btb %>%
 ```
 
 ```{r}
-#initialize mice to get predictor matrix
-init=mice(btb.long, max=0, print=FALSE)
-pred=init$predictorMatrix
-
-#remove unwanted variables from predictor matrix
-pred[, "drug"] = 0
-pred[, "length"] = 0
-pred[, "treatment"] = 0
-pred[, "visit"] = 0
-pred[, "occasion"] = 0
-
-#restrict variable with NAs from being imputed 
-meth=init$method
-meth[c("score")]="norm" 
-
-imputed = mice(btb.long, method=meth, predictorMatrix=pred, m=5)
-
-imp <- complete(imputed)
-head(imp)
-```
-
-
-```{r}
 ##compare mean models
 
 #1)linear model - unstructured
@@ -416,9 +393,12 @@ ggplot(btb.long, aes(x = occasion, y = score, group = id, color = factor(treatme
     title = "Spaghetti Plot of Marginal Mean Response Over Time"
   ) +
   theme_minimal()
+##spaghetti plot shows high variation between subject BDI scores so we will fit a LMM with random intercept and maybe random slope to account for this variation
 ```
 
 ```{r}
+
+
 lme.intp <- lme(score ~ occasion + drug + length + occasion:treatment, 
             random = ~ 1 | id,
             data = btb.long, na.action = na.omit)
@@ -426,9 +406,13 @@ summary(lme.intp)
 
 lme.slope <- lme(score ~ occasion + drug + length + occasion:treatment, 
             random = ~ occasion | id,
-            data = btb.long, na.action = na.omit)
-summary(lme2)
+            data = btb.long, na.action = na.omit,
+            )
+summary(lme.slope)
 
+lme.intp1 <- lme(score ~ occasion + length + occasion:treatment, 
+            random = ~ 1 | id,
+            data = btb.long, na.action = na.omit)
 
 outAIC <- function(x){
   sumx <- summary(x)
@@ -438,11 +422,14 @@ outAIC <- function(x){
 }
 allaic <- rbind(
   outAIC(lme.intp),
-  outAIC(lme.slope)
+  outAIC(lme.slope),
+  outAIC(lme.intp1)
 )
-rownames(allaic) <- c("lme.intp", "lme.slope")
+rownames(allaic) <- c("lme.intp", "lme.slope", "lme.intp1")
 allaic
+#AIC is similar for all models but BIC is lowest for lme.intp1 (which is also more parsemoneous) so we go with that model over the others
 ```
+
 ```{r}
 # pre post
 # time: 0 1 2 3 4
@@ -450,21 +437,60 @@ btb.long <- btb.long %>%
   mutate(time = occasion - 1,
          post = ifelse(time > 0, 1, 0))
 
+btb.long <- btb.long %>%
+  mutate(month = ifelse(occasion == 1,0,
+                        ifelse(occasion == 2,2,
+                            ifelse(occasion== 3,4,
+                               ifelse(occasion== 4,6,NA)))),
+    knot = ifelse(month - 2 < 0, 0, month - 2))
+
+
+btb.long <- na.omit(btb.long) 
+
 # random intercept
 mod1.un <- lme(score ~ post + drug + length + post:treatment,
                random = ~ 1 | id, data = btb.long, na.action = na.omit)
 summary(mod1.un)
 
 # random intercept and slope model
-mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, 
-                  data = btb.long, na.action = na.omit)
+mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, data = btb.long, na.action = na.omit,
+                  control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
 summary(mod1.slope)
 
 
 mod1.un.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ 1 | id, 
                   method = "ML", data = btb.long, na.action = na.omit)
 mod1.slope.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, 
-                  method = "ML", data = btb.long, na.action = na.omit)
+                  method = "ML", data = btb.long, na.action = na.omit, control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
 anova(mod1.un.ml, mod1.slope.ml)
+
+#since p-value is 0.2046 we the random slope does not add significant value to the model so we can stick with the more parsimonious model
 ```
 
+```{r}
+#spline model
+
+
+mod1.slope.knot <- lme(score ~ post + drug + length + knot + post:treatment + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit,
+                  control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
+
+summary(mod1.slope.knot)
+
+mod1.slope.knot.ml <- lme(score ~ post + drug + length + knot + post:treatment + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit,control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100), method = "ML")
+
+anova(mod1.slope.knot.ml, mod1.un.ml)
+
+#reject the null and conclude adding the spline significantly impacts the accuracy of the model so we use the spline model with a random intercept
+```
+
+```{r}
+condmean <- predict(mod1.slope.knot) # gives you the conditional means
+margmean <- predictSE(mod1.slope.knot, btb.long)$fit # gives you the marginal means
+predbf <- as.data.frame(cbind(btb.long, condmean, margmean))
+predbf %>%
+  ggplot(aes(x = time, y = condmean, group = id)) +
+  geom_line(linetype = 3, alpha = 0.7) + 
+  geom_point(aes(x = time, y = margmean), size = 1.5, color = "maroon") + 
+  labs(y = "Score", x = "Time") #+
+  #ylim(0,45) + xlim(-6.5,5)
+```
