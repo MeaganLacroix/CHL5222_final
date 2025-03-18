@@ -443,4 +443,23 @@ allaic <- rbind(
 rownames(allaic) <- c("lme.intp", "lme.slope")
 allaic
 ```
+```{r}
+# pre post
+# time: 0 1 2 3 4
+btb.long <- btb.long %>%
+  mutate(time = occasion - 1,
+         post = ifelse(time > 0, 1, 0))
+
+# random intercept
+mod1.un <- lme(score ~ post + drug + length + post:treatment,
+               random = ~ 1 | id, data = btb.long, na.action = na.omit)
+summary(mod1.un)
+
+# random intercept and slope model
+mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, 
+                  data = btb.long, na.action = na.omit)
+summary(mod1.slope)
+
+anova(mod1.un, mod1.slope)
+```
 
