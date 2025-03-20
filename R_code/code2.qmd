@@ -256,19 +256,6 @@ btb %>%
 # missing data is monotone, arising from dropout, use likelihood methods like in class
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 ```{r}
 ##compare different variance structures
 
@@ -303,10 +290,10 @@ ggplot(btb.long, aes(x = occasion, y = score, group = id, color = factor(treatme
   geom_line(alpha = 0.4) +          # Individual trajectories
   geom_smooth(aes(group = treatment), method = "loess", se = FALSE, linewidth = 1.2) +  # Marginal means
   labs(
-    x = "Time (months)",
+    x = "Time",
     y = "BDI Score",
     color = "Treatment Group",
-    title = "Spaghetti Plot of Marginal Mean Response Over Time"
+    title = "Spaghetti Plot with Marginal Mean Response Over Time"
   ) +
   theme_minimal()
 ##spaghetti plot shows high variation between subject BDI scores so we will fit a LMM with random intercept and maybe random slope to account for this variation
@@ -372,7 +359,8 @@ mod1.un <- lme(score ~ post + drug + length + post:treatment,
 summary(mod1.un)
 
 # random intercept and slope model
-mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, data = btb.long, na.action = na.omit)
+mod1.slope <- lme(score ~ post + drug + length + post:treatment, 
+                  random = ~ post | id, data = btb.long, na.action = na.omit)
 summary(mod1.slope)
 
 
@@ -384,15 +372,12 @@ mod1.slope.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ p
 )
 anova(mod1.un.ml, mod1.slope.ml)
 
-#since p-value is 0.2046 we the random slope does not add significant value to the model so we can stick with the more parsimonious model
+#since p-value <0.0001, the random intercept and slope model is significantly better
 ```
 
 ```{r}
 #spline model
-
-
 mod1.slope.knot <- lme(score ~ month + drug + length + knot +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
-
 
 summary(mod1.slope.knot)
 
@@ -420,3 +405,66 @@ predbf %>%
   labs(y = "Score", x = "Time") #+
   #ylim(0,45) + xlim(-6.5,5)
 ```
+
+
+```{r}
+btb.nona <- na.omit(btb)
+cov(btb.nona[, 5:9])
+cor(btb.nona[, 5:9])
+# the covariance and correlation matrices are not observed obvious patterns
+# do we still need to test the intercept + diff covariance error?
+```
+
+```{r}
+b1hat <- ranef(mod1.slope)[,1]
+b2hat <- ranef(mod1.slope)[,2]
+
+qqnorm(b1hat, pch=1)
+qqline(b1hat, col = "steelblue", lwd = 2)
+
+qqnorm(b2hat, pch=1)
+qqline(b2hat, col = "steelblue", lwd = 2)
+
+# tails are not along the line
+```
+
+```{r}
+b1hat <- ranef(mod1.slope.knot)[,1]
+b2hat <- ranef(mod1.slope.knot)[,2]
+b3hat <- ranef(mod1.slope.knot)[,3]
+
+qqnorm(b1hat, pch=1)
+qqline(b1hat, col = "steelblue", lwd = 2)
+
+qqnorm(b2hat, pch=1)
+qqline(b2hat, col = "steelblue", lwd = 2)
+
+qqnorm(b3hat, pch=1)
+qqline(b3hat, col = "steelblue", lwd = 2)
+# tails are not along the line
+```
+
+```{r}
+ranef(mod1.slope) %>%
+  pivot_longer(cols = c("(Intercept)", "post"),
+               names_to = "ranefs",
+               values_to = "estimates") %>%
+  ggplot(aes(x = estimates)) + 
+  geom_histogram(position = "identity", alpha = 0.5, bins = 50, fill = "orange") +
+  facet_grid(~ ranefs)
+
+# a little bit skewed, but should be fine
+```
+
+```{r}
+ranef(mod1.slope.knot) %>%
+  pivot_longer(cols = c("(Intercept)", "month", "knot"),
+               names_to = "ranefs",
+               values_to = "estimates") %>%
+  ggplot(aes(x = estimates)) + 
+  geom_histogram(position = "identity", alpha = 0.5, bins = 50, fill = "orange") +
+  facet_grid(~ ranefs)
+
+# roughly symmetric
+```
+
