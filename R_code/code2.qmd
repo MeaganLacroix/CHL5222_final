@@ -398,9 +398,15 @@ summary(mod1.slope.knot)
 
 mod1.slope.knot.ml <- lme(score ~ month + drug + length + knot + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit, method = "ML")
 
-anova(mod1.slope.knot.ml, mod1.slope.ml)
+allaic <- rbind(
+  outAIC(mod1.slope.knot),
+  outAIC(mod1.slope)
 
-#reject the null and conclude adding the spline to the random intercept/slope significantly helps the model
+)
+rownames(allaic) <- c("mod1.slope.knot", "mod1.slope")
+allaic
+
+#spline has a lower AIC bit a higher BIC - we could go with more parsimoneous model I think
 ```
 
 ```{r}
