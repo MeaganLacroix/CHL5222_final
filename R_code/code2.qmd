@@ -256,101 +256,17 @@ btb %>%
 # missing data is monotone, arising from dropout, use likelihood methods like in class
 ```
 
-```{r}
-##compare mean models
-
-#1)linear model - unstructured
-btb.long$occasion <- as.numeric(as.factor(btb.long$occasion))
-
-mean.mod1 <- gls(score ~ drug + length + occasion + treatment:occasion,  
-                 corr = corSymm(form = ~ occasion | id), 
-                 weights = varIdent(form = ~ 1 | occasion), 
-                 na.action = na.omit, data = btb.long)
-summary(mean.mod1)
-```
-
-```{r}
-#2) quadratic model
-btb.long <- btb.long %>%
-  mutate(occasionc = occasion - mean(occasion), 
-         occasion2 = occasionc^2)
-
-mean.mod2 <- gls(score ~ occasionc + drug + length + treatment:occasionc + treatment:occasion2, 
-                 corr=corSymm(form= ~ occasion | id), 
-                 weights = varIdent(form = ~ 1 | occasion), 
-                 na.action = na.omit, data = btb.long)
-
-summary(mean.mod2)
-```
-
-```{r}
-#3) model with no interaction
-mean.mod3 <- gls(score ~ occasion + length + drug, 
-                 corr=corSymm(form = ~ occasion | id), 
-                 weights = varIdent(form = ~ 1 | occasion), 
-                 na.action = na.omit, data = btb.long)
-summary(mean.mod3)
-```
-
-```{r}
-#4) spline at month = 2
-btb.long <- btb.long %>%
-  mutate(month = ifelse(occasion == 1,0,
-                        ifelse(occasion == 2,2,
-                            ifelse(occasion== 3,4,
-                               ifelse(occasion== 4,6,NA)))),
-    knot = ifelse(month - 2 < 0, 0, month - 2))
-
-spline.mod1 <- gls(score ~ drug + length + occasion + knot + treatment:occasion + treatment:knot,
-                   corr=corSymm(form = ~ occasion | id), 
-                   weights = varIdent(form = ~ 1 | occasion), 
-                   na.action = na.omit, data = btb.long)
-summary(spline.mod1)
-```
-
-```{r}
-## compare mean models using lrt since they are nested
-# refit models with ML
-mean.mod1.ml <- gls(score ~ drug + length + occasion + treatment:occasion,  
-                    corr=corSymm(form= ~ occasion | id), 
-                    weights = varIdent(form = ~ 1 | occasion), 
-                    na.action = na.omit, method = "ML", data = btb.long)
-
-mean.mod2.ml <- gls(score ~ occasionc + drug + length + treatment:occasionc + treatment:occasion2,
-                    corr=corSymm(form= ~ occasion | id), 
-                    weights = varIdent(form = ~ 1 | occasion), 
-                    na.action = na.omit, method = "ML", data = btb.long)
-
-mean.mod3.ml <- gls(score ~ occasion + length + drug, 
-                    corr=corSymm(form= ~ occasion | id), 
-                    weights = varIdent(form = ~ 1 | occasion), 
-                    na.action = na.omit, method="ML", data = btb.long)
-
-spline.mod1.ml <- gls(score ~ drug + length + occasion + knot + treatment:occasion + treatment:knot,  
-                      corr=corSymm(form= ~ occasion | id), 
-                      weights = varIdent(form = ~ 1 | occasion), 
-                      na.action = na.omit, method = "ML", data = btb.long)
-
-anova(mean.mod1.ml, mean.mod2.ml)
-# p value is 0.0284 so we reject the null and say the quadratic is better 
-
-anova(mean.mod1.ml, mean.mod3.ml)
-#pvalue is 0.24 so we do not reject the null and accept model 3
-
-anova(mean.mod2.ml, mean.mod3.ml)
-
-#anova(mean.mod2.ml, spline.mod1.ml)
-#Error in nlme::anova.lme(object = mean.mod2.ml, spline.mod1.ml) : 
-#all fitted objects must use the same number of observations
-```
 
 
-```{r}
-##compare mean model to random intercept model
-rim1 <- lme(score ~ occasion + drug + length, random = ~ 1 | id,
-            data = btb.long, na.action = na.omit)
-summary(rim1)
-```
+
+
+
+
+
+
+
+
+
 
 
 ```{r}
@@ -434,14 +350,17 @@ allaic
 # pre post
 # time: 0 1 2 3 4
 btb.long <- btb.long %>%
-  mutate(time = occasion - 1,
-         post = ifelse(time > 0, 1, 0))
+  group_by(id) %>%
+  mutate(time = row_number() - 1, 
+         post = ifelse(time > 0, 1, 0)) %>%
+  ungroup()
 
 btb.long <- btb.long %>%
-  mutate(month = ifelse(occasion == 1,0,
-                        ifelse(occasion == 2,2,
-                            ifelse(occasion== 3,4,
-                               ifelse(occasion== 4,6,NA)))),
+  mutate(month = ifelse(occasion == 0,0,
+                        ifelse(occasion == 1,2,
+                            ifelse(occasion== 2,4,
+                               ifelse(occasion== 3,6,
+                                ifelse(occasion == 4, 8, NA))))),
     knot = ifelse(month - 2 < 0, 0, month - 2))
 
 
@@ -453,15 +372,16 @@ mod1.un <- lme(score ~ post + drug + length + post:treatment,
 summary(mod1.un)
 
 # random intercept and slope model
-mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, data = btb.long, na.action = na.omit,
-                  control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
+mod1.slope <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, data = btb.long, na.action = na.omit)
 summary(mod1.slope)
 
 
 mod1.un.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ 1 | id, 
                   method = "ML", data = btb.long, na.action = na.omit)
 mod1.slope.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ post | id, 
-                  method = "ML", data = btb.long, na.action = na.omit, control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
+                  method = "ML", data = btb.long, na.action = na.omit, 
+#control = lmeControl(opt = "optim", maxIter = 50, msMaxIter = 50)
+)
 anova(mod1.un.ml, mod1.slope.ml)
 
 #since p-value is 0.2046 we the random slope does not add significant value to the model so we can stick with the more parsimonious model
@@ -471,16 +391,16 @@ anova(mod1.un.ml, mod1.slope.ml)
 #spline model
 
 
-mod1.slope.knot <- lme(score ~ post + drug + length + knot + post:treatment + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit,
-                  control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100))
+mod1.slope.knot <- lme(score ~ month + drug + length + knot +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
+
 
 summary(mod1.slope.knot)
 
-mod1.slope.knot.ml <- lme(score ~ post + drug + length + knot + post:treatment + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit,control = lmeControl(opt = "optim", maxIter = 100, msMaxIter = 100), method = "ML")
+mod1.slope.knot.ml <- lme(score ~ month + drug + length + knot + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit, method = "ML")
 
-anova(mod1.slope.knot.ml, mod1.un.ml)
+anova(mod1.slope.knot.ml, mod1.slope.ml)
 
-#reject the null and conclude adding the spline significantly impacts the accuracy of the model so we use the spline model with a random intercept
+#reject the null and conclude adding the spline to the random intercept/slope significantly helps the model
 ```
 
 ```{r}
