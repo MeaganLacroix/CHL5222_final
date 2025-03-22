@@ -29,7 +29,7 @@ names(btb)
 head(btb)
 tail(btb)
 ```
-
+## Data preparation
 ```{r}
 #add participant ID
 btb <- btb %>%
@@ -49,8 +49,6 @@ btb <- btb %>%
 
 ```{r}
 str(btb)  # Check structure
-table(btb$drug)  # See counts for each category
-table(btb$treatment)
 ```
 
 ```{r}
@@ -68,28 +66,29 @@ values_to = "score")%>%
       visit == "bdi.8m"  ~ 4))
 ```
 
+
+### EDA
 ```{r}
 #make summary table for plotting
 btb_summary <- btb.long %>%
   group_by(occasion, treatment, drug, length) %>%
   summarise(
     mean_bdi = mean(score, na.rm = TRUE),
-    sd_bdi = sd(score, na.rm = TRUE),  
-    lower_ci = mean_bdi - 1.96 * sd_bdi,  
-    upper_ci = mean_bdi + 1.96 * sd_bdi   
+    sd_bdi = sd(score, na.rm = TRUE)
   ) %>%
   ungroup()
 ```
 
 ```{r}
+#Mean BDI score over time by group
 
 ggplot(btb_summary, aes(x = occasion, y = mean_bdi, color = treatment, group = treatment)) +
   geom_line(size = 1) +    # Line plot for mean BDI over time
   geom_point(size = 2) +   # Add points for means
-  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci), width = 0.2) + # Add 95% CI
+  geom_errorbar(aes(ymin = mean_bdi-sd_bdi, ymax = mean_bdi+sd_bdi), width = 0.2) + # Add 95% CI
   facet_grid(drug ~ length) +  # Panel by drug and length groups
   labs(title = "Mean BDI Score Over Time by Treatment",
-       x = "Time (Occasion)", y = "Mean BDI Score",
+       x = "Occasion", y = "Mean BDI Score",
        color = "Treatment Group") +
   theme_minimal() +
   theme(strip.text = element_text(size = 12, face = "bold"))+
@@ -110,6 +109,7 @@ ggplot(btb, aes(x = bdi.pre)) +
 ```
 
 ```{r}
+#create histogram of distribution of scores for each treatment group
 ggplot(btb, aes(x = bdi.pre)) +
   geom_histogram(binwidth = 5, fill = "steelblue", color = "black", alpha = 0.7) +
   labs(title = "Distribution of BDI Scores Pre-Intervention", x = "BDI Score", y = "Count") +
@@ -180,6 +180,7 @@ btb_summary2 <- btb.long %>%
 ```
 
 ```{r}
+#Table for Mean and SD BDI scores over time by treatment group
 
 # Pivot data to wide format
 summary2_wide <- btb_summary2 %>%
@@ -213,9 +214,9 @@ ggplot(btb_summary2, aes(x = occasion, y = mean_bdi, color = treatment, group = 
   ylim(0, 60) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
-
+### Summarizing missing data
 ```{r}
-#summarizing number of observations at each occasion
+#summarizing number of non-NA observations at each occasion
 measurement_counts <- btb.long %>%
   group_by(occasion) %>%
   summarise(n = sum(!is.na(score)))
@@ -224,6 +225,8 @@ measurement_counts
 ```
 
 ```{r}
+#summarize missing data per group
+
 measurement_counts2 <- btb.long %>%
   group_by(treatment, occasion) %>%
   summarise(n = sum(is.na(score)), .groups = "drop")
