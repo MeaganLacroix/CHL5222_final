@@ -240,6 +240,8 @@ measurement_counts2_wide
 
 ### Methods
 
+
+
 ```{r}
 ##compare mean models to find best out of that
 #looks like there is a treatment difference
@@ -258,35 +260,6 @@ btb %>%
 
 # missing data is monotone, arising from dropout, use likelihood methods like in class
 ```
-
-```{r}
-##compare different variance structures
-
-##AR1
-mean.mod3.ml.ar1 <- gls(score ~ occasion + length + drug, 
-                        corr=corAR1(form= ~ occasion | id), 
-                        weights = varIdent(form = ~ 1 | occasion), 
-                        na.action = na.omit, method="ML", data = btb.long)
-
-##Compound Symmetry
-mean.mod3.ml.cs <- gls(score ~ occasion + length + drug, 
-                       corr=corCompSymm(form= ~ occasion | id), 
-                       weights = varIdent(form = ~ 1 | occasion), 
-                       na.action = na.omit, method="ML", data = btb.long)
-
-##compare AIC, BIC, LogLik
-compare = data.frame(
-  AIC = c(AIC(mean.mod3.ml), AIC(mean.mod3.ml.ar1), AIC(mean.mod3.ml.cs)),
-  BIC = c(BIC(mean.mod3.ml), BIC(mean.mod3.ml.ar1), BIC(mean.mod3.ml.cs)),
-  LogLik = c(logLik(mean.mod3.ml), logLik(mean.mod3.ml.ar1), logLik(mean.mod3.ml.cs))
-)
-compare
-# mean.mod3.ml has the smallest AIC 2675.3266
-# mean.mod3.ml.ar1 has the smallest BIC 2729.718
-# mean.mod3.ml has the biggest LogLik -1318.683
-```
-
-
 ```{r}
 # spaghetti plot
 ggplot(btb.long, aes(x = occasion, y = score, group = id, color = factor(treatment))) +
@@ -302,39 +275,6 @@ ggplot(btb.long, aes(x = occasion, y = score, group = id, color = factor(treatme
 ##spaghetti plot shows high variation between subject BDI scores so we will fit a LMM with random intercept and maybe random slope to account for this variation
 ```
 
-```{r}
-
-
-lme.intp <- lme(score ~ occasion + drug + length + occasion:treatment, 
-            random = ~ 1 | id,
-            data = btb.long, na.action = na.omit)
-summary(lme.intp)
-
-lme.slope <- lme(score ~ occasion + drug + length + occasion:treatment, 
-            random = ~ occasion | id,
-            data = btb.long, na.action = na.omit,
-            )
-summary(lme.slope)
-
-lme.intp1 <- lme(score ~ occasion + length + occasion:treatment, 
-            random = ~ 1 | id,
-            data = btb.long, na.action = na.omit)
-
-outAIC <- function(x){
-  sumx <- summary(x)
-  out <- c(sumx$AIC, sumx$BIC)
-  names(out) <- c("AIC", "BIC")
-  out
-}
-allaic <- rbind(
-  outAIC(lme.intp),
-  outAIC(lme.slope),
-  outAIC(lme.intp1)
-)
-rownames(allaic) <- c("lme.intp", "lme.slope", "lme.intp1")
-allaic
-#AIC is similar for all models but BIC is lowest for lme.intp1 (which is also more parsemoneous) so we go with that model over the others
-```
 
 ```{r}
 # pre post
@@ -362,7 +302,7 @@ mod1.un <- lme(score ~ post + drug + length + post:treatment,
 summary(mod1.un)
 
 # random intercept and slope model
-mod1.slope <- lme(score ~ post + drug + length + post:treatment, 
+mod1.slope <- lme(score ~ post + drug+ length + post:treatment, 
                   random = ~ post | id, data = btb.long, na.action = na.omit)
 summary(mod1.slope)
 
@@ -376,30 +316,77 @@ mod1.slope.ml <- lme(score ~ post + drug + length + post:treatment, random = ~ p
 anova(mod1.un.ml, mod1.slope.ml)
 
 #since p-value <0.0001, the random intercept and slope model is significantly better
+#also exclude drug because it is not significant in either model
+
+mod1.slope1 <- lme(score ~ post + length + post:treatment, 
+                  random = ~ post | id, data = btb.long, na.action = na.omit)
 ```
 
 ```{r}
 #spline model
-mod1.slope.knot <- lme(score ~ month + drug + length + knot +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
+#dropped drug
+mod1.slope.knot <- lme(score ~ month + length + knot + month:treatment +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
 
 summary(mod1.slope.knot)
 
-mod1.slope.knot.ml <- lme(score ~ month + drug + length + knot + knot:treatment, random = ~ post + knot| id, data = btb.long, na.action = na.omit, method = "ML")
+outAIC <- function(x){
+  sumx <- summary(x)
+  out <- c(sumx$AIC, sumx$BIC)
+  names(out) <- c("AIC", "BIC")
+  out
+}
 
 allaic <- rbind(
   outAIC(mod1.slope.knot),
-  outAIC(mod1.slope)
+  outAIC(mod1.slope1)
 
 )
-rownames(allaic) <- c("mod1.slope.knot", "mod1.slope")
+rownames(allaic) <- c("mod1.slope.knot", "mod1.slope1")
 allaic
 
-#spline has a lower AIC bit a higher BIC - we could go with more parsimoneous model I think
+#Go with the model with a lower BIC because it values parsimony and is still a good fitting model
 ```
 
 ```{r}
-condmean <- predict(mod1.slope.knot) # gives you the conditional means
-margmean <- predictSE(mod1.slope.knot, btb.long)$fit # gives you the marginal means
+mm <- model.matrix(score ~ post + length + post:treatment, 
+                  random = ~ post | id, data = btb.long, na.action = na.omit)
+
+library(AICcmodavg)
+predval <- predictSE(mod1.slope, newdata = mm)
+
+head(predval$fit)
+
+# using the ci function from above
+pred95ci <- ci(predval$fit, predval$se.fit, alpha = 0.05, df = 767)
+pred90ci <- ci(predval$fit, predval$se.fit, alpha = 0.1, df = 767)
+pred85ci <- ci(predval$fit, predval$se.fit, alpha = 0.15, df = 767)
+
+allpred <- as.data.frame(list(predval, pred95ci, pred90ci, pred85ci))
+smokpred <- cbind(smoking, allpred) %>%
+  group_by(smoking, year) %>%
+  mutate(meanfev1 = mean(fev1)) %>%
+  ungroup
+smokpred
+
+smokpred %>%
+  mutate(smoker = case_when(
+    smoking == 0 ~ "Former",
+    smoking == 1 ~ "Current"
+  )) %>%
+  ggplot(aes(x = year, y = fit)) +
+    geom_ribbon(aes(ymin = lo95ci, ymax = hi95ci, fill = smoker), alpha = .2) +
+    geom_ribbon(aes(ymin = lo90ci, ymax = hi90ci, fill = smoker), alpha = .4) +
+    geom_ribbon(aes(ymin = lo85ci, ymax = hi85ci, fill = smoker), alpha = .6) +
+    geom_line(aes(color = smoker)) + 
+    geom_point(aes(x = year, y = meanfev1, color = smoker)) + # add observed mean FEV1 
+    labs(title = "Observed and expected FEV1 values \nby year and smoking status", y = "FEV1 (liters)", x = "Year",   color = "Smoker", fill = "Smoker") 
+
+```
+
+
+```{r}
+condmean <- predict(mod1.slope1) # gives you the conditional means
+margmean <- predictSE(mod1.slope1, btb.long)$fit # gives you the marginal means
 predbf <- as.data.frame(cbind(btb.long, condmean, margmean))
 predbf %>%
   ggplot(aes(x = time, y = condmean, group = id)) +
@@ -471,3 +458,72 @@ ranef(mod1.slope.knot) %>%
 # roughly symmetric
 ```
 
+OLD CODE - TO DELETE
+```{r}
+
+##compare different variance structures
+
+##AR1
+mean.mod3.ml.ar1 <- gls(score ~ occasion + length + drug, 
+                        corr=corAR1(form= ~ occasion | id), 
+                        weights = varIdent(form = ~ 1 | occasion), 
+                        na.action = na.omit, method="ML", data = btb.long)
+
+##Compound Symmetry
+mean.mod3.ml.cs <- gls(score ~ occasion + length + drug, 
+                       corr=corCompSymm(form= ~ occasion | id), 
+                       weights = varIdent(form = ~ 1 | occasion), 
+                       na.action = na.omit, method="ML", data = btb.long)
+
+##compare AIC, BIC, LogLik
+compare = data.frame(
+  AIC = c(AIC(mean.mod3.ml), AIC(mean.mod3.ml.ar1), AIC(mean.mod3.ml.cs)),
+  BIC = c(BIC(mean.mod3.ml), BIC(mean.mod3.ml.ar1), BIC(mean.mod3.ml.cs)),
+  LogLik = c(logLik(mean.mod3.ml), logLik(mean.mod3.ml.ar1), logLik(mean.mod3.ml.cs))
+)
+compare
+# mean.mod3.ml has the smallest AIC 2675.3266
+# mean.mod3.ml.ar1 has the smallest BIC 2729.718
+# mean.mod3.ml has the biggest LogLik -1318.683
+```
+
+
+
+```{r}
+
+
+lme.intp <- lme(score ~ occasion + drug + length + occasion:treatment, 
+            random = ~ 1 | id,
+            data = btb.long, na.action = na.omit)
+summary(lme.intp)
+
+lme.slope <- lme(score ~ occasion + drug + length + occasion:treatment, 
+            random = ~ occasion | id,
+            data = btb.long, na.action = na.omit,
+            )
+summary(lme.slope)
+
+lme.intp1 <- lme(score ~ occasion + length + occasion:treatment, 
+            random = ~ 1 | id,
+            data = btb.long, na.action = na.omit)
+
+outAIC <- function(x){
+  sumx <- summary(x)
+  out <- c(sumx$AIC, sumx$BIC)
+  names(out) <- c("AIC", "BIC")
+  out
+}
+allaic <- rbind(
+  outAIC(lme.intp),
+  outAIC(lme.slope),
+  outAIC(lme.intp1)
+)
+rownames(allaic) <- c("lme.intp", "lme.slope", "lme.intp1")
+allaic
+#AIC is similar for all models but BIC is lowest for lme.intp1 (which is also more parsemoneous) so we go with that model over the others
+```
+
+
+
+
+```
