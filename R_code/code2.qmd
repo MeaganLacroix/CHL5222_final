@@ -458,6 +458,9 @@ ranef(mod1.slope.knot) %>%
 # roughly symmetric
 ```
 
+
+
+
 OLD CODE - TO DELETE
 ```{r}
 
@@ -526,4 +529,23 @@ allaic
 
 
 
+```{r}
+summary(mod1.slope1)
+fixed_effects <- data.frame(
+  Term = c("(Intercept)", "post", "length>6m", "post:treatmentBtheB"),
+  Estimate = c(21.776532, -6.128568, 3.046016, -3.063345),
+  Std.Error = c(1.455234, 1.281959, 1.925801, 1.665841),
+  DF = c(278, 278, 98, 278),
+  t_value = c(14.964278, -4.780627, 1.581688, -1.838919),
+  p_value = c("<0.001", "<0.001", 0.1169, 0.0670)
+)
+kable(fixed_effects, digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+random_effects <- data.frame(
+  Component = c("Intercept (SD)", "Slope: post (SD)", "Residual (SD)", "Correlation (Intercept, post)"),
+  Value = c(9.368, 6.649, 5.249, -0.269)
+)
+kable(random_effects, digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
 ```
+
