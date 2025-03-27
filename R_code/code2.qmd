@@ -323,11 +323,22 @@ mod1.slope1 <- lme(score ~ post + length + post:treatment,
 ```
 
 ```{r}
-#spline model
-#dropped drug
-mod1.slope.knot <- lme(score ~ month + length + knot + month:treatment +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
 
-summary(mod1.slope.knot)
+
+lme.intp <- lme(score ~ occasion + drug + length + occasion:treatment, 
+            random = ~ 1 | id,
+            data = btb.long, na.action = na.omit)
+summary(lme.intp)
+
+lme.slope <- lme(score ~ occasion + drug + length + occasion:treatment, 
+            random = ~ occasion | id,
+            data = btb.long, na.action = na.omit,
+            )
+summary(lme.slope)
+
+lme.intp1 <- lme(score ~ occasion + length + occasion:treatment, 
+            random = ~ 1 | id,
+            data = btb.long, na.action = na.omit)
 
 outAIC <- function(x){
   sumx <- summary(x)
@@ -335,17 +346,27 @@ outAIC <- function(x){
   names(out) <- c("AIC", "BIC")
   out
 }
+allaic <- rbind(
+  outAIC(lme.intp),
+  outAIC(lme.slope),
+  outAIC(lme.intp1)
+)
+rownames(allaic) <- c("lme.intp", "lme.slope", "lme.intp1")
+allaic
+#AIC is similar for all models but BIC is lowest for lme.intp1 (which is also more parsemoneous) so we go with that model over the others
+
 
 allaic <- rbind(
-  outAIC(mod1.slope.knot),
-  outAIC(mod1.slope1)
-
+  outAIC(mod1.slope),
+  outAIC(mod1.un),
+  outAIC(lme.intp1)
 )
-rownames(allaic) <- c("mod1.slope.knot", "mod1.slope1")
-allaic
 
-#Go with the model with a lower BIC because it values parsimony and is still a good fitting model
+#AIC and BIC are smallest for randome slope and intercept model when time is divided as pre and post
 ```
+
+
+
 
 ```{r}
 mm <- model.matrix(score ~ post + length + post:treatment, 
@@ -490,22 +511,11 @@ compare
 
 
 ```{r}
+#spline model
+#dropped drug
+mod1.slope.knot <- lme(score ~ month + length + knot + month:treatment +  knot:treatment, random = ~ month + knot| id, data = btb.long, na.action = na.omit)
 
-
-lme.intp <- lme(score ~ occasion + drug + length + occasion:treatment, 
-            random = ~ 1 | id,
-            data = btb.long, na.action = na.omit)
-summary(lme.intp)
-
-lme.slope <- lme(score ~ occasion + drug + length + occasion:treatment, 
-            random = ~ occasion | id,
-            data = btb.long, na.action = na.omit,
-            )
-summary(lme.slope)
-
-lme.intp1 <- lme(score ~ occasion + length + occasion:treatment, 
-            random = ~ 1 | id,
-            data = btb.long, na.action = na.omit)
+summary(mod1.slope.knot)
 
 outAIC <- function(x){
   sumx <- summary(x)
@@ -513,14 +523,16 @@ outAIC <- function(x){
   names(out) <- c("AIC", "BIC")
   out
 }
+
 allaic <- rbind(
-  outAIC(lme.intp),
-  outAIC(lme.slope),
-  outAIC(lme.intp1)
+  outAIC(mod1.slope.knot),
+  outAIC(mod1.slope1)
+
 )
-rownames(allaic) <- c("lme.intp", "lme.slope", "lme.intp1")
+rownames(allaic) <- c("mod1.slope.knot", "mod1.slope1")
 allaic
-#AIC is similar for all models but BIC is lowest for lme.intp1 (which is also more parsemoneous) so we go with that model over the others
+
+#Go with the model with a lower BIC because it values parsimony and is still a good fitting model
 ```
 
 
